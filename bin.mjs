@@ -176,8 +176,8 @@ async function buildImage(image, options) {
   const argv = ['build', '-t', image, '-f', options.dockerFile]
 
   if (options.packaged) {
-    const playbook = path.join(options.dockerContext, 'dock-codex.yml')
-    argv.push('--target', (await pathExists(playbook)) ? 'with-playbook' : 'without-playbook')
+    const initScript = path.join(options.dockerContext, '.dock-codex-init.sh')
+    argv.push('--target', (await pathExists(initScript)) ? 'with-init' : 'without-init')
   }
 
   argv.push(options.dockerContext)

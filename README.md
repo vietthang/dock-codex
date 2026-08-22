@@ -55,28 +55,23 @@ printenv OPENAI_API_KEY | dock-codex . login --with-api-key
 ## Project Setup
 
 Codex is installed by the packaged Dockerfile. Optionally add
-`dock-codex.yml` to the project root to provision additional tools in the
+`.dock-codex-init.sh` to the project root to provision additional tools in the
 project's cached image:
 
-```yaml
----
-- name: Build the Dock Codex development environment
-  hosts: localhost
-  connection: local
-  gather_facts: false
+```sh
+#!/bin/bash
+set -euo pipefail
 
-  tasks:
-    - name: Install jq for this project
-      ansible.builtin.package:
-        name: jq
-        state: present
+apt-get update
+apt-get install -y --no-install-recommends jq
+rm -rf /var/lib/apt/lists/*
 ```
 
-The packaged Dockerfile starts from `node:24-slim` and installs `ansible-core`,
-CA certificates, Git, OpenSSH, and Codex directly. When `dock-codex.yml`
-exists, the Docker build runs it after installing Codex and passes
-`CODEX_VERSION` as `codex_version`. The default Codex version is `latest`.
-Without a playbook, the Ansible step is skipped entirely.
+The packaged Dockerfile starts from `node:24-slim` and installs CA certificates,
+Git, OpenSSH, and Codex directly. When `.dock-codex-init.sh` exists, the Docker
+build runs it with Bash as root after installing Codex. `CODEX_VERSION` is
+available to the script and defaults to `latest`. Without an init script, the
+customization step is skipped entirely.
 
 For full control, `Dockerfile.dock-codex` remains available as an advanced
 override.

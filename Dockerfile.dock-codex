@@ -1,11 +1,10 @@
 FROM node:24-slim AS base
 
 ARG CODEX_VERSION=latest
-ARG CODEX_PLAYBOOK=dock-codex.yml
+ARG CODEX_INIT_SCRIPT=.dock-codex-init.sh
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
-    ansible-core \
     ca-certificates \
     git \
     openssh-client \
@@ -17,15 +16,11 @@ WORKDIR /workspace
 
 ENTRYPOINT ["codex"]
 
-FROM base AS with-playbook
+FROM base AS with-init
 
-COPY ${CODEX_PLAYBOOK} /tmp/dock-codex-playbook.yml
+COPY ${CODEX_INIT_SCRIPT} /tmp/dock-codex-init.sh
 
-RUN ansible-playbook \
-      --inventory localhost, \
-      --connection local \
-      --extra-vars "codex_version=${CODEX_VERSION}" \
-      /tmp/dock-codex-playbook.yml \
-  && rm /tmp/dock-codex-playbook.yml
+RUN CODEX_VERSION="${CODEX_VERSION}" bash /tmp/dock-codex-init.sh \
+  && rm /tmp/dock-codex-init.sh
 
-FROM base AS without-playbook
+FROM base AS without-init
