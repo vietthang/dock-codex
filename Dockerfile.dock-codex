@@ -1,0 +1,31 @@
+FROM node:24-slim AS base
+
+ARG CODEX_VERSION=latest
+ARG CODEX_PLAYBOOK=dock-codex.yml
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+    ansible-core \
+    ca-certificates \
+    git \
+    openssh-client \
+  && rm -rf /var/lib/apt/lists/*
+
+RUN npm install --global "@openai/codex@${CODEX_VERSION}"
+
+WORKDIR /workspace
+
+ENTRYPOINT ["codex"]
+
+FROM base AS with-playbook
+
+COPY ${CODEX_PLAYBOOK} /tmp/dock-codex-playbook.yml
+
+RUN ansible-playbook \
+      --inventory localhost, \
+      --connection local \
+      --extra-vars "codex_version=${CODEX_VERSION}" \
+      /tmp/dock-codex-playbook.yml \
+  && rm /tmp/dock-codex-playbook.yml
+
+FROM base AS without-playbook

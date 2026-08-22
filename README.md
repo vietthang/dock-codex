@@ -1,0 +1,96 @@
+# dock-codex
+
+Run OpenAI Codex inside Docker with a host directory mounted as `/workspace`.
+
+## Usage
+
+```sh
+npx dock-codex
+dock-codex ~/src/my-project
+dock-codex . --full-auto
+```
+
+Arguments after the directory are passed to `codex`. Use `.` before Codex
+flags when mounting the current directory.
+
+## Options
+
+- `--image <name>`: Docker image tag. Defaults to
+  `dock-codex-(dirname):latest`.
+- `--rebuild`: rebuild before running.
+- `--docker-file <path>`: Dockerfile for `docker build`. Defaults to
+  the packaged `Dockerfile.dock-codex`. Pass this option to use a custom
+  Dockerfile.
+- `--docker-context <path>`: build context for `docker build`. Defaults to the
+  mounted directory.
+- `--guest-mount <path>`: repeatable workspace-relative path hidden by a
+  guest-only volume. Defaults to `node_modules`.
+- `--mount <host:guest>`: repeatable extra host bind mount. Relative host paths
+  resolve from the current directory; guest paths must be absolute.
+
+Examples:
+
+```sh
+dock-codex --docker-file ./Dockerfile.dev --docker-context . --rebuild .
+dock-codex --guest-mount dist --guest-mount packages/app/node_modules .
+dock-codex --mount ~/.ssh:/workspace/.ssh --mount ../shared:/shared .
+```
+
+## Authentication
+
+Codex keeps its configuration and login state in `.dock-codex/` in the
+mounted project. On first use, sign in interactively. In a headless container,
+device-code authentication is the most convenient option:
+
+```sh
+dock-codex . login --device-auth
+```
+
+For API-key authentication, pass the key only to the login command:
+
+```sh
+printenv OPENAI_API_KEY | dock-codex . login --with-api-key
+```
+
+## Project Setup
+
+Codex is installed by the packaged Dockerfile. Optionally add
+`dock-codex.yml` to the project root to provision additional tools in the
+project's cached image:
+
+```yaml
+---
+- name: Build the Dock Codex development environment
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  tasks:
+    - name: Install jq for this project
+      ansible.builtin.package:
+        name: jq
+        state: present
+```
+
+The packaged Dockerfile starts from `node:24-slim` and installs `ansible-core`,
+CA certificates, Git, OpenSSH, and Codex directly. When `dock-codex.yml`
+exists, the Docker build runs it after installing Codex and passes
+`CODEX_VERSION` as `codex_version`. The default Codex version is `latest`.
+Without a playbook, the Ansible step is skipped entirely.
+
+For full control, `Dockerfile.dock-codex` remains available as an advanced
+override.
+
+Add `.dock-codex` to both `.gitignore` and `.dockerignore`:
+
+```gitignore
+.dock-codex/
+```
+
+## Notes
+
+- The image is built on first run.
+- The container runs as the current host UID/GID.
+- Codex state is stored in `.dock-codex/` inside the mounted directory.
+- Host Codex configuration and OpenAI-related environment variables are not
+  forwarded automatically.
