@@ -6,15 +6,21 @@ ARG CODEX_INIT_SCRIPT=.dock-codex-init.sh
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
     ca-certificates \
+    curl \
     git \
     openssh-client \
+    procps \
   && rm -rf /var/lib/apt/lists/*
 
-RUN npm install --global "@openai/codex@${CODEX_VERSION}"
+RUN CODEX_HOME=/opt/codex \
+  CODEX_INSTALL_DIR=/usr/local/bin \
+  CODEX_RELEASE="${CODEX_VERSION}" \
+  CODEX_NON_INTERACTIVE=1 \
+  sh -c 'curl -fsSL https://chatgpt.com/codex/install.sh | sh'
 
 WORKDIR /workspace
 
-ENTRYPOINT ["codex"]
+ENTRYPOINT ["/usr/local/bin/codex"]
 
 FROM base AS with-init
 

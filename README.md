@@ -8,10 +8,13 @@ Run OpenAI Codex inside Docker with a host directory mounted as `/workspace`.
 npx dock-codex
 dock-codex ~/src/my-project
 dock-codex . --full-auto
+dock-codex . remote-control start
+dock-codex . remote-control pair
 ```
 
 Arguments after the directory are passed to `codex`. Use `.` before Codex
-flags when mounting the current directory.
+flags when mounting the current directory. Each workspace reuses a named Docker
+container, and each invocation runs Codex inside it with `docker exec`.
 
 ## Options
 
@@ -52,6 +55,15 @@ For API-key authentication, pass the key only to the login command:
 printenv OPENAI_API_KEY | dock-codex . login --with-api-key
 ```
 
+Remote Control requires ChatGPT authentication. Start and pair it in the same
+persistent workspace container:
+
+```sh
+dock-codex . login --device-auth
+dock-codex . remote-control start
+dock-codex . remote-control pair
+```
+
 ## Project Setup
 
 Codex is installed by the packaged Dockerfile. Optionally add
@@ -68,10 +80,10 @@ rm -rf /var/lib/apt/lists/*
 ```
 
 The packaged Dockerfile starts from `node:24-slim` and installs CA certificates,
-Git, OpenSSH, and Codex directly. When `.dock-codex-init.sh` exists, the Docker
-build runs it with Bash as root after installing Codex. `CODEX_VERSION` is
-available to the script and defaults to `latest`. Without an init script, the
-customization step is skipped entirely.
+Git, OpenSSH, procps, and the standalone Codex release from OpenAI's installer.
+When `.dock-codex-init.sh` exists, the Docker build runs it with Bash as root
+after installing Codex. `CODEX_VERSION` is available to the script and defaults
+to `latest`. Without an init script, the customization step is skipped entirely.
 
 For full control, `Dockerfile.dock-codex` remains available as an advanced
 override.
@@ -85,6 +97,11 @@ Add `.dock-codex` to both `.gitignore` and `.dockerignore`:
 ## Notes
 
 - The image is built on first run.
+- Each workspace uses a named `dock-codex-(dirname)` container.
+- The container stays alive with `sleep infinity`; Codex runs through
+  `docker exec`.
+- Containers are not removed automatically. Use `docker rm -f <name>` when a
+  workspace container is no longer needed.
 - The container runs as the current host UID/GID.
 - Codex state is stored in `.dock-codex/` inside the mounted directory.
 - Host Codex configuration and OpenAI-related environment variables are not

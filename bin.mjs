@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { mkdir, access } from 'node:fs/promises'
+import { mkdir, access, lstat, symlink } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
@@ -10,6 +10,7 @@ import packageJson from './package.json' with { type: 'json' }
 const packageRoot = path.dirname(fileURLToPath(import.meta.url))
 const cliName = 'dock-codex'
 const defaultGuestMounts = ['node_modules']
+const imageCodexInstall = '/opt/codex/packages/standalone/current'
 
 const cmd = command(
   cliName,
@@ -65,10 +66,14 @@ const cmd = command(
 
     const guestMounts = defaultGuestMounts.concat(flags.guestMount ?? [])
     const hostMounts = flags.mount ?? []
-    const result = await run(
-      'docker',
-      await dockerRunArgs(image, mountDir, guestMounts, hostMounts, cmd.rest ?? [])
+    const containerName = await ensureContainer(
+      image,
+      mountDir,
+      guestMounts,
+      hostMounts,
+      flags.rebuild
     )
+    const result = await run('docker', dockerExecArgs(containerName, cmd.rest ?? []))
     process.exit(result.status ?? 1)
   }
 )
@@ -186,14 +191,61 @@ async function buildImage(image, options) {
   if (result.status !== 0) fail(`failed to build Docker image ${image}`, result.status ?? 1)
 }
 
-async function dockerRunArgs(image, mountDir, guestMounts, hostMounts, codexArgs) {
-  const argv = ['run', '--rm']
+function containerName(mountDir) {
+  return `${cliName}-${imageNamePart(path.basename(mountDir))}`
+}
 
-  if (process.stdin.isTTY && process.stdout.isTTY) argv.push('-it')
-  else if (!process.stdin.isTTY) argv.push('-i')
+async function containerRunning(name) {
+  const result = await run(
+    'docker',
+    ['container', 'inspect', '--format', '{{.State.Running}}', name],
+    { stdio: 'pipe', encoding: 'utf8' }
+  )
+  if (result.status !== 0) return null
+  return result.stdout.trim() === 'true'
+}
+
+async function ensureContainer(image, mountDir, guestMounts, hostMounts, rebuild) {
+  const name = containerName(mountDir)
+  let running = await containerRunning(name)
+
+  if (rebuild && running !== null) {
+    const removeResult = await run('docker', ['rm', '-f', name])
+    if (removeResult.status !== 0) fail(`failed to replace container ${name}`)
+    running = null
+  }
+
+  if (running === true) return name
+
+  if (running === false) {
+    const startResult = await run('docker', ['start', name], { stdio: 'pipe' })
+    if (startResult.status !== 0) fail(`failed to restart container ${name}`)
+    return name
+  }
+
+  const result = await run(
+    'docker',
+    await dockerCreateArgs(image, name, mountDir, guestMounts, hostMounts),
+    { stdio: 'pipe' }
+  )
+  if (result.status !== 0) fail(`failed to create container ${name}`)
+  return name
+}
+
+async function dockerCreateArgs(image, name, mountDir, guestMounts, hostMounts) {
+  const argv = ['run', '-d', '--name', name]
 
   const codexHome = path.join(mountDir, '.dock-codex')
   await mkdir(codexHome, { recursive: true })
+  await ensureStandaloneLink(codexHome)
+
+  const tmpfsOptions = `uid=${process.getuid()},gid=${process.getgid()},mode=700`
+  argv.push(
+    '--tmpfs',
+    `/workspace/.dock-codex/app-server-control:${tmpfsOptions}`,
+    '--tmpfs',
+    `/workspace/.dock-codex/app-server-daemon:${tmpfsOptions}`
+  )
 
   argv.push(
     '--user',
@@ -218,8 +270,29 @@ async function dockerRunArgs(image, mountDir, guestMounts, hostMounts, codexArgs
     argv.push('-v', guestMountTarget(mount))
   }
 
-  argv.push(image, ...codexArgs)
+  argv.push('--entrypoint', '/usr/bin/sleep', image, 'infinity')
   return argv
+}
+
+function dockerExecArgs(name, codexArgs) {
+  const argv = ['exec']
+  if (process.stdin.isTTY && process.stdout.isTTY) argv.push('-it')
+  else if (!process.stdin.isTTY) argv.push('-i')
+  argv.push(name, '/usr/local/bin/codex', ...codexArgs)
+  return argv
+}
+
+async function ensureStandaloneLink(codexHome) {
+  const standaloneDir = path.join(codexHome, 'packages', 'standalone')
+  const current = path.join(standaloneDir, 'current')
+  await mkdir(standaloneDir, { recursive: true })
+
+  try {
+    await lstat(current)
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error
+    await symlink(imageCodexInstall, current, 'dir')
+  }
 }
 
 cmd.parse()
