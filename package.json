@@ -1,6 +1,6 @@
 {
   "name": "dock-codex",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Run OpenAI Codex inside Docker with the current directory mounted.",
   "type": "module",
   "bin": {
