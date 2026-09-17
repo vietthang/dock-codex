@@ -37,6 +37,15 @@ const cmd = command(
     '--mount <host:guest>',
     'Extra host directory to bind mount into the container. Can be specified multiple times.'
   ).multiple(),
+  flag(
+    '--cap-add <capability>',
+    'Linux capability to add to the container. Can be specified multiple times.'
+  ).multiple(),
+  flag('--network <mode>', 'Docker network mode or network name for the container.'),
+  flag(
+    '--device <host[:guest[:permissions]]>',
+    'Host device to add to the container. Can be specified multiple times.'
+  ).multiple(),
   flag('--version', 'Show package version.'),
   arg('[directory]', 'Directory to mount. Defaults to the current directory.'),
   rest('[...codexArgs]', 'Arguments passed through to the codex command.'),
@@ -66,11 +75,17 @@ const cmd = command(
 
     const guestMounts = defaultGuestMounts.concat(flags.guestMount ?? [])
     const hostMounts = flags.mount ?? []
+    const containerOptions = {
+      capabilities: flags.capAdd ?? [],
+      network: flags.network,
+      devices: flags.device ?? []
+    }
     const containerName = await ensureContainer(
       image,
       mountDir,
       guestMounts,
       hostMounts,
+      containerOptions,
       flags.rebuild
     )
     const result = await run('docker', dockerExecArgs(containerName, cmd.rest ?? []))
@@ -205,7 +220,14 @@ async function containerRunning(name) {
   return result.stdout.trim() === 'true'
 }
 
-async function ensureContainer(image, mountDir, guestMounts, hostMounts, rebuild) {
+async function ensureContainer(
+  image,
+  mountDir,
+  guestMounts,
+  hostMounts,
+  containerOptions,
+  rebuild
+) {
   const name = containerName(mountDir)
   let running = await containerRunning(name)
 
@@ -225,15 +247,23 @@ async function ensureContainer(image, mountDir, guestMounts, hostMounts, rebuild
 
   const result = await run(
     'docker',
-    await dockerCreateArgs(image, name, mountDir, guestMounts, hostMounts),
+    await dockerCreateArgs(image, name, mountDir, guestMounts, hostMounts, containerOptions),
     { stdio: 'pipe' }
   )
   if (result.status !== 0) fail(`failed to create container ${name}`)
   return name
 }
 
-async function dockerCreateArgs(image, name, mountDir, guestMounts, hostMounts) {
+async function dockerCreateArgs(image, name, mountDir, guestMounts, hostMounts, containerOptions) {
   const argv = ['run', '-d', '--name', name]
+
+  for (const capability of containerOptions.capabilities) {
+    argv.push('--cap-add', capability)
+  }
+  if (containerOptions.network) argv.push('--network', containerOptions.network)
+  for (const device of containerOptions.devices) {
+    argv.push('--device', device)
+  }
 
   const codexHome = path.join(mountDir, '.dock-codex')
   await mkdir(codexHome, { recursive: true })

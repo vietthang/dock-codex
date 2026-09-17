@@ -30,6 +30,10 @@ container, and each invocation runs Codex inside it with `docker exec`.
   guest-only volume. Defaults to `node_modules`.
 - `--mount <host:guest>`: repeatable extra host bind mount. Relative host paths
   resolve from the current directory; guest paths must be absolute.
+- `--cap-add <capability>`: repeatable Linux capability to add to the container.
+- `--network <mode>`: Docker network mode or network name for the container.
+- `--device <host[:guest[:permissions]]>`: repeatable host device to add to the
+  container.
 
 Examples:
 
@@ -37,7 +41,12 @@ Examples:
 dock-codex --docker-file ./Dockerfile.dev --docker-context . --rebuild .
 dock-codex --guest-mount dist --guest-mount packages/app/node_modules .
 dock-codex --mount ~/.ssh:/workspace/.ssh --mount ../shared:/shared .
+dock-codex --cap-add NET_ADMIN .
+dock-codex --cap-add NET_ADMIN --device /dev/net/tun .
 ```
+
+Container options apply when Docker creates the container. Use `--rebuild` or
+remove the existing workspace container to change these options.
 
 ## Authentication
 
@@ -79,8 +88,10 @@ apt-get install -y --no-install-recommends jq
 rm -rf /var/lib/apt/lists/*
 ```
 
-The packaged Dockerfile starts from `node:24-slim` and installs CA certificates,
-Git, OpenSSH, procps, and the standalone Codex release from OpenAI's installer.
+The packaged Dockerfile starts from `debian:bookworm-slim` and installs CA
+certificates, Git, OpenSSH, procps, and the standalone Codex release from
+OpenAI's installer. It does not include Node.js. Install Node.js in
+`.dock-codex-init.sh` if your project needs it.
 When `.dock-codex-init.sh` exists, the Docker build runs it with Bash as root
 after installing Codex. `CODEX_VERSION` is available to the script and defaults
 to `latest`. Without an init script, the customization step is skipped entirely.

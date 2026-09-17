@@ -1,4 +1,4 @@
-FROM node:24-slim AS base
+FROM debian:bookworm-slim AS base
 
 ARG CODEX_VERSION=latest
 ARG CODEX_INIT_SCRIPT=.dock-codex-init.sh
