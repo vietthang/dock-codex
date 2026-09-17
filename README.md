@@ -28,21 +28,18 @@ container, and each invocation runs Codex inside it with `docker exec`.
   mounted directory.
 - `--guest-mount <path>`: repeatable workspace-relative path hidden by a
   guest-only volume. Defaults to `node_modules`.
-- `--mount <host:guest>`: repeatable extra host bind mount. Relative host paths
-  resolve from the current directory; guest paths must be absolute.
-- `--cap-add <capability>`: repeatable Linux capability to add to the container.
-- `--network <mode>`: Docker network mode or network name for the container.
-- `--device <host[:guest[:permissions]]>`: repeatable host device to add to the
-  container.
+- `--docker-run <argument>`: repeatable argument passed to `docker run` when the
+  container is created. Use `--docker-run=--option=value` when the argument
+  starts with `--`.
 
 Examples:
 
 ```sh
 dock-codex --docker-file ./Dockerfile.dev --docker-context . --rebuild .
 dock-codex --guest-mount dist --guest-mount packages/app/node_modules .
-dock-codex --mount ~/.ssh:/workspace/.ssh --mount ../shared:/shared .
-dock-codex --cap-add NET_ADMIN .
-dock-codex --cap-add NET_ADMIN --device /dev/net/tun .
+dock-codex --docker-run=--network=host .
+dock-codex --docker-run=--cap-add=NET_ADMIN --docker-run=--device=/dev/net/tun .
+dock-codex --docker-run=--mount=type=bind,src=/host/path,dst=/container/path .
 ```
 
 Container options apply when Docker creates the container. Use `--rebuild` or
